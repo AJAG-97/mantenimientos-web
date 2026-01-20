@@ -54,9 +54,65 @@
             animation: pulse 2s infinite;
         }
 
+        .live-indicator.offline {
+            background: #ff9800;
+            animation: none;
+        }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
+        }
+
+        .setup-banner {
+            background: #e3f2fd;
+            border: 2px solid #2196F3;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .setup-banner.show {
+            display: block;
+        }
+
+        .setup-banner h3 {
+            color: #1976D2;
+            margin-bottom: 15px;
+        }
+
+        .setup-banner p, .setup-banner li {
+            color: #424242;
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        .setup-banner ol {
+            margin-left: 20px;
+        }
+
+        .setup-banner input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #2196F3;
+            border-radius: 5px;
+        }
+
+        .setup-banner button {
+            background: #2196F3;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1em;
+        }
+
+        .setup-banner button:hover {
+            background: #1976D2;
         }
 
         .tabs {
@@ -199,12 +255,6 @@
             width: 100%;
         }
 
-        .btn-secondary {
-            background: #f0f0f0;
-            color: #333;
-            margin-top: 10px;
-        }
-
         .maintenance-card {
             background: #f9f9f9;
             border-radius: 10px;
@@ -311,13 +361,6 @@
             color: #999;
         }
 
-        .empty-state svg {
-            width: 100px;
-            height: 100px;
-            margin-bottom: 20px;
-            opacity: 0.3;
-        }
-
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -344,26 +387,13 @@
             opacity: 0.9;
         }
 
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #667eea;
-            font-weight: 600;
-        }
-
-        .new-record-badge {
-            background: #4CAF50;
-            color: white;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            margin-left: 10px;
-            animation: fadeIn 0.5s;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+        .code-box {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+            word-break: break-all;
         }
 
         @media (max-width: 768px) {
@@ -386,12 +416,36 @@
         <div class="header">
             <h1>🔧 Sistema de Mantenimientos</h1>
             <p class="subtitle">Registro y seguimiento de mantenimientos en tiempo real</p>
-            <div class="live-indicator">🔴 EN VIVO - Sincronizado con todos los usuarios</div>
+            <div class="live-indicator" id="liveIndicator">⚫ Configuración pendiente</div>
+        </div>
+
+        <div class="setup-banner show" id="setupBanner">
+            <h3>🔥 Firebase - Configuración Rápida (5 minutos)</h3>
+            <ol>
+                <li>Ve a <a href="https://console.firebase.google.com" target="_blank"><strong>Firebase Console</strong></a></li>
+                <li>Crea un nuevo proyecto (dale el nombre que quieras)</li>
+                <li>En el menú lateral, ve a <strong>Firestore Database</strong> → Crear base de datos</li>
+                <li>Selecciona <strong>"Modo de prueba"</strong> → Siguiente → Habilitar</li>
+                <li>Ve a <strong>Configuración del proyecto</strong> (ícono de engranaje) → Agregar app → Web</li>
+                <li>Copia la configuración que aparece y pégala abajo:</li>
+            </ol>
+            
+            <label>Configuración de Firebase (formato JSON):</label>
+            <textarea id="firebaseConfig" rows="8" placeholder='{
+  "apiKey": "tu-api-key",
+  "authDomain": "tu-proyecto.firebaseapp.com",
+  "projectId": "tu-proyecto-id",
+  "storageBucket": "tu-proyecto.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:123456789:web:abcdef"
+}'></textarea>
+            <button onclick="saveFirebaseConfig()">🚀 Activar Sincronización en Tiempo Real</button>
         </div>
 
         <div class="tabs">
             <button class="tab active" onclick="switchTab('nuevo')">➕ Nuevo Registro</button>
             <button class="tab" onclick="switchTab('historial')">📋 Historial</button>
+            <button class="tab" onclick="switchTab('config')">⚙️ Configuración</button>
         </div>
 
         <div class="content">
@@ -462,84 +516,106 @@
                 <div class="stats" id="stats"></div>
                 <div id="maintenanceList"></div>
             </div>
+
+            <!-- Tab Configuración -->
+            <div id="config" class="tab-content">
+                <h2 style="margin-bottom: 20px;">⚙️ Configuración de Firebase</h2>
+                <div class="form-group">
+                    <label>Configuración de Firebase (JSON):</label>
+                    <textarea id="firebaseConfigEdit" rows="8"></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="saveFirebaseConfig()">💾 Guardar Configuración</button>
+                
+                <hr style="margin: 30px 0;">
+                
+                <h3>📝 Instrucciones Detalladas:</h3>
+                <ol style="line-height: 2; margin-top: 15px;">
+                    <li>Ve a <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a></li>
+                    <li>Click en "Crear un proyecto" o "Agregar proyecto"</li>
+                    <li>Dale un nombre (ej: "mantenimientos-2025")</li>
+                    <li>Desactiva Google Analytics (opcional) y crea el proyecto</li>
+                    <li>En el menú lateral: <strong>Compilación</strong> → <strong>Firestore Database</strong></li>
+                    <li>Click en "Crear base de datos"</li>
+                    <li>Selecciona <strong>"Comenzar en modo de prueba"</strong> → Siguiente</li>
+                    <li>Selecciona una ubicación cercana → Habilitar</li>
+                    <li>Ve al ícono de engranaje ⚙️ → "Configuración del proyecto"</li>
+                    <li>En "Tus apps" → Click en el ícono </> (Web)</li>
+                    <li>Dale un nombre y registra la app</li>
+                    <li>Copia todo el objeto firebaseConfig que aparece</li>
+                    <li>Pégalo arriba y guarda</li>
+                </ol>
+            </div>
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        let db = null;
         let maintenances = [];
-        let lastUpdateTime = null;
-        let autoRefreshInterval = null;
+        let unsubscribe = null;
 
-        // Cargar datos al iniciar
-        window.addEventListener('load', async () => {
-            await loadMaintenances();
-            setDefaultDateTime();
-            setupPhotoPreview();
-            startAutoRefresh();
-        });
-
-        // Auto-actualización cada 3 segundos
-        function startAutoRefresh() {
-            autoRefreshInterval = setInterval(async () => {
-                await loadMaintenances(true); // Carga silenciosa
-            }, 3000);
-        }
-
-        // Detener auto-actualización al cerrar
-        window.addEventListener('beforeunload', () => {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-            }
-        });
-
-        async function loadMaintenances(silent = false) {
+        window.saveFirebaseConfig = function() {
+            const configText = document.getElementById('firebaseConfig').value || document.getElementById('firebaseConfigEdit').value;
+            
             try {
-                const keys = await window.storage.list('maintenance:', true);
+                const config = JSON.parse(configText);
+                localStorage.setItem('firebaseConfig', configText);
                 
-                if (!keys || !keys.keys) {
-                    maintenances = [];
-                    if (!silent) displayMaintenances();
-                    return;
-                }
-
-                const promises = keys.keys.map(async key => {
-                    try {
-                        const result = await window.storage.get(key, true);
-                        if (result && result.value) {
-                            return JSON.parse(result.value);
-                        }
-                    } catch (error) {
-                        console.error('Error loading key:', key, error);
-                        return null;
-                    }
-                });
-
-                const loadedData = await Promise.all(promises);
-                const newMaintenances = loadedData
-                    .filter(item => item !== null)
-                    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-                // Detectar cambios
-                const hasChanges = JSON.stringify(newMaintenances) !== JSON.stringify(maintenances);
-                
-                if (hasChanges) {
-                    maintenances = newMaintenances;
-                    displayMaintenances();
-                    
-                    if (silent && document.getElementById('historial').classList.contains('active')) {
-                        showUpdateNotification();
-                    }
-                }
+                initFirebase(config);
+                document.getElementById('setupBanner').classList.remove('show');
+                alert('✅ Configuración guardada. ¡Sincronización activada!');
             } catch (error) {
-                console.error('Error al cargar registros:', error);
-                if (!silent) {
-                    maintenances = [];
-                    displayMaintenances();
-                }
+                alert('❌ Error: Verifica que el JSON sea válido');
+                console.error(error);
             }
         }
 
-        function showUpdateNotification() {
+        function initFirebase(config) {
+            try {
+                const app = initializeApp(config);
+                db = getFirestore(app);
+                
+                updateStatus(true);
+                listenToChanges();
+            } catch (error) {
+                console.error('Error al inicializar Firebase:', error);
+                updateStatus(false);
+            }
+        }
+
+        function listenToChanges() {
+            const q = query(collection(db, 'maintenances'), orderBy('timestamp', 'desc'));
+            
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                maintenances = [];
+                snapshot.forEach((doc) => {
+                    maintenances.push({ id: doc.id, ...doc.data() });
+                });
+                displayMaintenances();
+                
+                if (snapshot.docChanges().length > 0 && document.getElementById('historial').classList.contains('active')) {
+                    showNotification('✓ Historial actualizado en tiempo real');
+                }
+            }, (error) => {
+                console.error('Error al escuchar cambios:', error);
+                updateStatus(false);
+            });
+        }
+
+        function updateStatus(online) {
+            const indicator = document.getElementById('liveIndicator');
+            if (online) {
+                indicator.textContent = '🔴 EN VIVO - Sincronizado con Firebase';
+                indicator.classList.remove('offline');
+            } else {
+                indicator.textContent = '⚫ OFFLINE - Verifica configuración';
+                indicator.classList.add('offline');
+            }
+        }
+
+        function showNotification(message) {
             const notification = document.createElement('div');
             notification.style.cssText = `
                 position: fixed;
@@ -551,38 +627,29 @@
                 border-radius: 8px;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.3);
                 z-index: 1000;
-                animation: slideInRight 0.3s ease-out;
             `;
-            notification.textContent = '✓ Historial actualizado';
+            notification.textContent = message;
             document.body.appendChild(notification);
-
-            setTimeout(() => {
-                notification.style.animation = 'slideOutRight 0.3s ease-out';
-                setTimeout(() => notification.remove(), 300);
-            }, 2000);
+            setTimeout(() => notification.remove(), 3000);
         }
 
-        async function saveMaintenance(maintenance) {
-            try {
-                const key = `maintenance:${maintenance.id}`;
-                await window.storage.set(key, JSON.stringify(maintenance), true);
-                return true;
-            } catch (error) {
-                console.error('Error al guardar:', error);
-                return false;
+        // Cargar configuración guardada
+        window.addEventListener('load', () => {
+            const savedConfig = localStorage.getItem('firebaseConfig');
+            if (savedConfig) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    document.getElementById('firebaseConfigEdit').value = savedConfig;
+                    initFirebase(config);
+                    document.getElementById('setupBanner').classList.remove('show');
+                } catch (error) {
+                    console.error('Error al cargar configuración:', error);
+                }
             }
-        }
-
-        async function deleteMaintenance(id) {
-            try {
-                const key = `maintenance:${id}`;
-                await window.storage.delete(key, true);
-                return true;
-            } catch (error) {
-                console.error('Error al eliminar:', error);
-                return false;
-            }
-        }
+            
+            setDefaultDateTime();
+            setupPhotoPreview();
+        });
 
         function setDefaultDateTime() {
             const now = new Date();
@@ -611,6 +678,11 @@
         document.getElementById('maintenanceForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            if (!db) {
+                alert('⚠️ Primero configura Firebase en la pestaña Configuración');
+                return;
+            }
+
             const photoBefore = document.getElementById('photoBefore').files[0];
             const photoAfter = document.getElementById('photoAfter').files[0];
 
@@ -618,7 +690,6 @@
             const photoAfterData = photoAfter ? await fileToBase64(photoAfter) : null;
 
             const maintenance = {
-                id: Date.now(),
                 equipmentName: document.getElementById('equipmentName').value,
                 maintenanceType: document.getElementById('maintenanceType').value,
                 date: document.getElementById('date').value,
@@ -630,18 +701,17 @@
                 timestamp: new Date().toISOString()
             };
 
-            const saved = await saveMaintenance(maintenance);
-            
-            if (saved) {
-                alert('✅ Registro guardado exitosamente y visible para todos');
+            try {
+                await addDoc(collection(db, 'maintenances'), maintenance);
+                alert('✅ Registro guardado y sincronizado con todos los usuarios en tiempo real');
                 document.getElementById('maintenanceForm').reset();
                 document.getElementById('previewBefore').innerHTML = '';
                 document.getElementById('previewAfter').innerHTML = '';
                 setDefaultDateTime();
-                await loadMaintenances();
                 switchTab('historial');
-            } else {
-                alert('❌ Error al guardar el registro. Intenta con fotos más pequeñas.');
+            } catch (error) {
+                console.error('Error al guardar:', error);
+                alert('❌ Error al guardar. Verifica tu conexión y configuración.');
             }
         });
 
@@ -661,9 +731,6 @@
             if (maintenances.length === 0) {
                 list.innerHTML = `
                     <div class="empty-state">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                        </svg>
                         <h2>No hay registros aún</h2>
                         <p>Comienza agregando tu primer mantenimiento</p>
                     </div>
@@ -724,13 +791,11 @@
                         </div>
                     ` : ''}
                     <div style="margin-top: 15px;">
-                        <a href="#" class="btn-download" onclick="downloadReport(${m.id}); return false;">📥 Descargar PDF</a>
-                        <button class="btn-delete" onclick="deleteRecord(${m.id})">🗑️ Eliminar</button>
+                        <a href="#" class="btn-download" onclick="downloadReport('${m.id}'); return false;">📥 Descargar</a>
+                        <button class="btn-delete" onclick="deleteRecord('${m.id}')">🗑️ Eliminar</button>
                     </div>
                 </div>
             `).join('');
-
-            lastUpdateTime = Date.now();
         }
 
         function formatDate(dateStr) {
@@ -738,20 +803,19 @@
             return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
         }
 
-        async function deleteRecord(id) {
-            if (!confirm('¿Estás seguro de eliminar este registro? Será eliminado para todos los usuarios.')) return;
+        window.deleteRecord = async function(id) {
+            if (!confirm('¿Estás seguro de eliminar este registro? Se eliminará para todos los usuarios.')) return;
             
-            const success = await deleteMaintenance(id);
-            
-            if (success) {
-                await loadMaintenances();
+            try {
+                await deleteDoc(doc(db, 'maintenances', id));
                 alert('✅ Registro eliminado');
-            } else {
+            } catch (error) {
+                console.error('Error al eliminar:', error);
                 alert('❌ Error al eliminar el registro');
             }
         }
 
-        function openImageModal(src) {
+        window.openImageModal = function(src) {
             const modal = window.open('', '_blank');
             modal.document.write(`
                 <!DOCTYPE html>
@@ -768,7 +832,7 @@
             `);
         }
 
-        function downloadReport(id) {
+        window.downloadReport = function(id) {
             const m = maintenances.find(item => item.id === id);
             if (!m) return;
 
@@ -815,16 +879,12 @@
             URL.revokeObjectURL(url);
         }
 
-        function switchTab(tabName) {
+        window.switchTab = function(tabName) {
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
             event.target.classList.add('active');
             document.getElementById(tabName).classList.add('active');
-            
-            if (tabName === 'historial') {
-                displayMaintenances();
-            }
         }
     </script>
 </body>
