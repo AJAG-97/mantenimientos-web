@@ -43,6 +43,22 @@
             font-size: 1.1em;
         }
 
+        .live-indicator {
+            display: inline-block;
+            padding: 5px 15px;
+            background: #4CAF50;
+            color: white;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
         .tabs {
             display: flex;
             gap: 10px;
@@ -196,6 +212,18 @@
             margin-bottom: 15px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             transition: all 0.3s;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .maintenance-card:hover {
@@ -323,6 +351,21 @@
             font-weight: 600;
         }
 
+        .new-record-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
         @media (max-width: 768px) {
             .photo-section {
                 grid-template-columns: 1fr;
@@ -343,6 +386,7 @@
         <div class="header">
             <h1>🔧 Sistema de Mantenimientos</h1>
             <p class="subtitle">Registro y seguimiento de mantenimientos en tiempo real</p>
+            <div class="live-indicator">🔴 EN VIVO - Sincronizado con todos los usuarios</div>
         </div>
 
         <div class="tabs">
@@ -422,82 +466,123 @@
     </div>
 
     <script>
-        let db;
         let maintenances = [];
-
-        // Inicializar IndexedDB
-        function initDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open('MaintenanceDB', 1);
-                
-                request.onerror = () => reject(request.error);
-                request.onsuccess = () => {
-                    db = request.result;
-                    resolve();
-                };
-                
-                request.onupgradeneeded = (event) => {
-                    const db = event.target.result;
-                    if (!db.objectStoreNames.contains('maintenances')) {
-                        const objectStore = db.createObjectStore('maintenances', { keyPath: 'id' });
-                        objectStore.createIndex('timestamp', 'timestamp', { unique: false });
-                    }
-                };
-            });
-        }
-
-        // Cargar todos los registros
-        async function loadMaintenances() {
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(['maintenances'], 'readonly');
-                const objectStore = transaction.objectStore('maintenances');
-                const request = objectStore.getAll();
-                
-                request.onsuccess = () => {
-                    maintenances = request.result.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-                    resolve();
-                };
-                request.onerror = () => reject(request.error);
-            });
-        }
-
-        // Guardar un registro
-        async function saveMaintenance(maintenance) {
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(['maintenances'], 'readwrite');
-                const objectStore = transaction.objectStore('maintenances');
-                const request = objectStore.add(maintenance);
-                
-                request.onsuccess = () => resolve();
-                request.onerror = () => reject(request.error);
-            });
-        }
-
-        // Eliminar un registro
-        async function deleteMaintenance(id) {
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(['maintenances'], 'readwrite');
-                const objectStore = transaction.objectStore('maintenances');
-                const request = objectStore.delete(id);
-                
-                request.onsuccess = () => resolve();
-                request.onerror = () => reject(request.error);
-            });
-        }
+        let lastUpdateTime = null;
+        let autoRefreshInterval = null;
 
         // Cargar datos al iniciar
         window.addEventListener('load', async () => {
-            try {
-                await initDB();
-                await loadMaintenances();
-                displayMaintenances();
-                setDefaultDateTime();
-                setupPhotoPreview();
-            } catch (error) {
-                console.error('Error al inicializar:', error);
-                alert('Error al inicializar la base de datos');
+            await loadMaintenances();
+            setDefaultDateTime();
+            setupPhotoPreview();
+            startAutoRefresh();
+        });
+
+        // Auto-actualización cada 3 segundos
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(async () => {
+                await loadMaintenances(true); // Carga silenciosa
+            }, 3000);
+        }
+
+        // Detener auto-actualización al cerrar
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
             }
         });
+
+        async function loadMaintenances(silent = false) {
+            try {
+                const keys = await window.storage.list('maintenance:', true);
+                
+                if (!keys || !keys.keys) {
+                    maintenances = [];
+                    if (!silent) displayMaintenances();
+                    return;
+                }
+
+                const promises = keys.keys.map(async key => {
+                    try {
+                        const result = await window.storage.get(key, true);
+                        if (result && result.value) {
+                            return JSON.parse(result.value);
+                        }
+                    } catch (error) {
+                        console.error('Error loading key:', key, error);
+                        return null;
+                    }
+                });
+
+                const loadedData = await Promise.all(promises);
+                const newMaintenances = loadedData
+                    .filter(item => item !== null)
+                    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+                // Detectar cambios
+                const hasChanges = JSON.stringify(newMaintenances) !== JSON.stringify(maintenances);
+                
+                if (hasChanges) {
+                    maintenances = newMaintenances;
+                    displayMaintenances();
+                    
+                    if (silent && document.getElementById('historial').classList.contains('active')) {
+                        showUpdateNotification();
+                    }
+                }
+            } catch (error) {
+                console.error('Error al cargar registros:', error);
+                if (!silent) {
+                    maintenances = [];
+                    displayMaintenances();
+                }
+            }
+        }
+
+        function showUpdateNotification() {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #4CAF50;
+                color: white;
+                padding: 15px 25px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 1000;
+                animation: slideInRight 0.3s ease-out;
+            `;
+            notification.textContent = '✓ Historial actualizado';
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 2000);
+        }
+
+        async function saveMaintenance(maintenance) {
+            try {
+                const key = `maintenance:${maintenance.id}`;
+                await window.storage.set(key, JSON.stringify(maintenance), true);
+                return true;
+            } catch (error) {
+                console.error('Error al guardar:', error);
+                return false;
+            }
+        }
+
+        async function deleteMaintenance(id) {
+            try {
+                const key = `maintenance:${id}`;
+                await window.storage.delete(key, true);
+                return true;
+            } catch (error) {
+                console.error('Error al eliminar:', error);
+                return false;
+            }
+        }
 
         function setDefaultDateTime() {
             const now = new Date();
@@ -545,20 +630,18 @@
                 timestamp: new Date().toISOString()
             };
 
-            try {
-                await saveMaintenance(maintenance);
-                await loadMaintenances();
-                
-                alert('✅ Registro guardado exitosamente');
+            const saved = await saveMaintenance(maintenance);
+            
+            if (saved) {
+                alert('✅ Registro guardado exitosamente y visible para todos');
                 document.getElementById('maintenanceForm').reset();
                 document.getElementById('previewBefore').innerHTML = '';
                 document.getElementById('previewAfter').innerHTML = '';
                 setDefaultDateTime();
-                displayMaintenances();
+                await loadMaintenances();
                 switchTab('historial');
-            } catch (error) {
-                console.error('Error al guardar:', error);
-                alert('❌ Error al guardar el registro');
+            } else {
+                alert('❌ Error al guardar el registro. Intenta con fotos más pequeñas.');
             }
         });
 
@@ -646,6 +729,8 @@
                     </div>
                 </div>
             `).join('');
+
+            lastUpdateTime = Date.now();
         }
 
         function formatDate(dateStr) {
@@ -654,15 +739,14 @@
         }
 
         async function deleteRecord(id) {
-            if (!confirm('¿Estás seguro de eliminar este registro?')) return;
+            if (!confirm('¿Estás seguro de eliminar este registro? Será eliminado para todos los usuarios.')) return;
             
-            try {
-                await deleteMaintenance(id);
+            const success = await deleteMaintenance(id);
+            
+            if (success) {
                 await loadMaintenances();
-                displayMaintenances();
                 alert('✅ Registro eliminado');
-            } catch (error) {
-                console.error('Error al eliminar:', error);
+            } else {
                 alert('❌ Error al eliminar el registro');
             }
         }
