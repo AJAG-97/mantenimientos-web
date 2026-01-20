@@ -249,6 +249,7 @@
             height: auto;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
         }
 
         .card-photo p {
@@ -313,6 +314,13 @@
         .stat-label {
             font-size: 1em;
             opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            font-weight: 600;
         }
 
         @media (max-width: 768px) {
@@ -414,38 +422,82 @@
     </div>
 
     <script>
+        let db;
         let maintenances = [];
+
+        // Inicializar IndexedDB
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('MaintenanceDB', 1);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    db = request.result;
+                    resolve();
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('maintenances')) {
+                        const objectStore = db.createObjectStore('maintenances', { keyPath: 'id' });
+                        objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    }
+                };
+            });
+        }
+
+        // Cargar todos los registros
+        async function loadMaintenances() {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['maintenances'], 'readonly');
+                const objectStore = transaction.objectStore('maintenances');
+                const request = objectStore.getAll();
+                
+                request.onsuccess = () => {
+                    maintenances = request.result.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+                    resolve();
+                };
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // Guardar un registro
+        async function saveMaintenance(maintenance) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['maintenances'], 'readwrite');
+                const objectStore = transaction.objectStore('maintenances');
+                const request = objectStore.add(maintenance);
+                
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // Eliminar un registro
+        async function deleteMaintenance(id) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['maintenances'], 'readwrite');
+                const objectStore = transaction.objectStore('maintenances');
+                const request = objectStore.delete(id);
+                
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
 
         // Cargar datos al iniciar
         window.addEventListener('load', async () => {
-            await loadData();
-            setDefaultDateTime();
-            setupPhotoPreview();
+            try {
+                await initDB();
+                await loadMaintenances();
+                displayMaintenances();
+                setDefaultDateTime();
+                setupPhotoPreview();
+            } catch (error) {
+                console.error('Error al inicializar:', error);
+                alert('Error al inicializar la base de datos');
+            }
         });
-
-        async function loadData() {
-            try {
-                const result = await window.storage.get('maintenances');
-                if (result && result.value) {
-                    maintenances = JSON.parse(result.value);
-                    displayMaintenances();
-                }
-            } catch (error) {
-                maintenances = [];
-                console.log('No hay datos guardados previamente');
-            }
-        }
-
-        async function saveData() {
-            try {
-                await window.storage.set('maintenances', JSON.stringify(maintenances));
-                return true;
-            } catch (error) {
-                console.error('Error al guardar:', error);
-                alert('Error al guardar los datos');
-                return false;
-            }
-        }
 
         function setDefaultDateTime() {
             const now = new Date();
@@ -493,10 +545,10 @@
                 timestamp: new Date().toISOString()
             };
 
-            maintenances.unshift(maintenance);
-            
-            const saved = await saveData();
-            if (saved) {
+            try {
+                await saveMaintenance(maintenance);
+                await loadMaintenances();
+                
                 alert('✅ Registro guardado exitosamente');
                 document.getElementById('maintenanceForm').reset();
                 document.getElementById('previewBefore').innerHTML = '';
@@ -504,6 +556,9 @@
                 setDefaultDateTime();
                 displayMaintenances();
                 switchTab('historial');
+            } catch (error) {
+                console.error('Error al guardar:', error);
+                alert('❌ Error al guardar el registro');
             }
         });
 
@@ -573,13 +628,13 @@
                         <div class="card-photos">
                             ${m.photoBefore ? `
                                 <div class="card-photo">
-                                    <img src="${m.photoBefore}" alt="Antes">
+                                    <img src="${m.photoBefore}" alt="Antes" onclick="openImageModal('${m.photoBefore}')">
                                     <p>ANTES</p>
                                 </div>
                             ` : ''}
                             ${m.photoAfter ? `
                                 <div class="card-photo">
-                                    <img src="${m.photoAfter}" alt="Después">
+                                    <img src="${m.photoAfter}" alt="Después" onclick="openImageModal('${m.photoAfter}')">
                                     <p>DESPUÉS</p>
                                 </div>
                             ` : ''}
@@ -601,9 +656,32 @@
         async function deleteRecord(id) {
             if (!confirm('¿Estás seguro de eliminar este registro?')) return;
             
-            maintenances = maintenances.filter(m => m.id !== id);
-            await saveData();
-            displayMaintenances();
+            try {
+                await deleteMaintenance(id);
+                await loadMaintenances();
+                displayMaintenances();
+                alert('✅ Registro eliminado');
+            } catch (error) {
+                console.error('Error al eliminar:', error);
+                alert('❌ Error al eliminar el registro');
+            }
+        }
+
+        function openImageModal(src) {
+            const modal = window.open('', '_blank');
+            modal.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Vista de Imagen</title>
+                    <style>
+                        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #000; }
+                        img { max-width: 95%; max-height: 95vh; }
+                    </style>
+                </head>
+                <body><img src="${src}"></body>
+                </html>
+            `);
         }
 
         function downloadReport(id) {
