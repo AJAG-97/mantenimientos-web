@@ -442,7 +442,8 @@
 }
 </textarea>
 
-            <button onclick="saveFirebaseConfig()">🚀 Activar Sincronización en Tiempo Real</button>
+            <button id="btnSaveFirebase">🚀 Activar Sincronización en Tiempo Real</button>
+
         </div>
 
         <div class="tabs">
@@ -596,6 +597,35 @@
         updateStatus(false);
     }
 }
+        document.getElementById('btnSaveFirebase')
+    ?.addEventListener('click', saveFirebaseConfig);
+
+        function saveFirebaseConfig() {
+    const textarea =
+        document.getElementById('firebaseConfig') ||
+        document.getElementById('firebaseConfigEdit');
+
+    if (!textarea || !textarea.value.trim()) {
+        alert('❌ Pega la configuración de Firebase');
+        return;
+    }
+
+    try {
+        // Firebase web config NO es JSON válido → usamos eval
+        const config = eval('(' + textarea.value + ')');
+
+        localStorage.setItem('firebaseConfig', textarea.value);
+        initFirebase(config);
+
+        document.getElementById('setupBanner')?.classList.remove('show');
+
+        alert('✅ Firebase conectado correctamente');
+    } catch (error) {
+        console.error(error);
+        alert('❌ Configuración de Firebase inválida');
+    }
+}
+
         window.saveFirebaseConfig = function () {
     const configText = document.getElementById('firebaseConfig').value;
 
@@ -941,6 +971,7 @@ try {
     </script>
 </body>
 </html>
+
 
 
 
