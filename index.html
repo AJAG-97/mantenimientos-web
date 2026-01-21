@@ -552,425 +552,147 @@
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import {
-        getStorage,
-        ref,
-        uploadBytes,
-        getDownloadURL
-        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+   
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
-        let db = null;
-        let maintenances = [];
-        let unsubscribe = null;
+let db = null;
+let storage = null;
+let maintenances = [];
+let unsubscribe = null;
 
-        window.saveFirebaseConfig = function() {
-            const configText = document.getElementById('firebaseConfig').value || document.getElementById('firebaseConfigEdit').value;
-            
-            try {
-                const config = JSON.parse(configText);
-                localStorage.setItem('firebaseConfig', configText);
-                
-                initFirebase(config);
-                document.getElementById('setupBanner').classList.remove('show');
-                alert('✅ Configuración guardada. ¡Sincronización activada!');
-            } catch (error) {
-                alert('❌ Error: Verifica que el JSON sea válido');
-                console.error(error);
-            }
-        }
-
-       let storage = null;
-
-      function initFirebase(config) {
-      try {
-        const app = initializeApp(config);
-        db = getFirestore(app);
-        storage = getStorage(app);
-
-        updateStatus(true);
-        listenToChanges();
-    } catch (error) {
-        console.error('Error al inicializar Firebase:', error);
-        updateStatus(false);
-    }
+/* =========================
+   FIREBASE INIT
+========================= */
+function initFirebase(config) {
+    const app = initializeApp(config);
+    db = getFirestore(app);
+    storage = getStorage(app);
+    updateStatus(true);
+    listenToChanges();
 }
-        document.getElementById('btnSaveFirebase')
-    ?.addEventListener('click', saveFirebaseConfig);
 
-        function saveFirebaseConfig() {
+/* =========================
+   SAVE CONFIG (UNA SOLA VEZ)
+========================= */
+window.saveFirebaseConfig = function () {
     const textarea =
         document.getElementById('firebaseConfig') ||
         document.getElementById('firebaseConfigEdit');
 
-    if (!textarea || !textarea.value.trim()) {
+    if (!textarea.value.trim()) {
         alert('❌ Pega la configuración de Firebase');
         return;
     }
 
     try {
-        // Firebase web config NO es JSON válido → usamos eval
-        const config = eval('(' + textarea.value + ')');
-
+        const config = JSON.parse(textarea.value);
         localStorage.setItem('firebaseConfig', textarea.value);
         initFirebase(config);
-
         document.getElementById('setupBanner')?.classList.remove('show');
-
         alert('✅ Firebase conectado correctamente');
-    } catch (error) {
-        console.error(error);
-        alert('❌ Configuración de Firebase inválida');
-    }
-}
-
-        window.saveFirebaseConfig = function () {
-    const configText = document.getElementById('firebaseConfig').value;
-
-    try {
-        const config = eval('(' + configText + ')');
-        initFirebase(config);
-        alert('✅ Firebase conectado correctamente');
-    } catch (error) {
-        console.error(error);
-        alert('❌ Configuración inválida');
+    } catch (e) {
+        console.error(e);
+        alert('❌ JSON inválido');
     }
 };
 
+document.getElementById('btnSaveFirebase')
+?.addEventListener('click', window.saveFirebaseConfig);
 
-
-        function listenToChanges() {
-            const q = query(collection(db, 'maintenances'), orderBy('timestamp', 'desc'));
-            
-            unsubscribe = onSnapshot(q, (snapshot) => {
-                maintenances = [];
-                snapshot.forEach((doc) => {
-                    maintenances.push({ id: doc.id, ...doc.data() });
-                });
-                displayMaintenances();
-                
-                if (snapshot.docChanges().length > 0 && document.getElementById('historial').classList.contains('active')) {
-                    showNotification('✓ Historial actualizado en tiempo real');
-                }
-            }, (error) => {
-                console.error('Error al escuchar cambios:', error);
-                updateStatus(false);
-            });
-        }
-
-        function updateStatus(online) {
-            const indicator = document.getElementById('liveIndicator');
-            if (online) {
-                indicator.textContent = '🔴 EN VIVO - Sincronizado con Firebase';
-                indicator.classList.remove('offline');
-            } else {
-                indicator.textContent = '⚫ OFFLINE - Verifica configuración';
-                indicator.classList.add('offline');
-            }
-        }
-
-        function showNotification(message) {
-            const notification = document.createElement('div');
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #4CAF50;
-                color: white;
-                padding: 15px 25px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                z-index: 1000;
-            `;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 3000);
-        }
-
-        // Cargar configuración guardada
-        window.addEventListener('load', () => {
-            const savedConfig = localStorage.getItem('firebaseConfig');
-            if (savedConfig) {
-                try {
-                    const config = JSON.parse(savedConfig);
-                    document.getElementById('firebaseConfigEdit').value = savedConfig;
-                    initFirebase(config);
-                    document.getElementById('setupBanner').classList.remove('show');
-                } catch (error) {
-                    console.error('Error al cargar configuración:', error);
-                }
-            }
-            
-            setDefaultDateTime();
-            setupPhotoPreview();
-        });
-
-        function setDefaultDateTime() {
-            const now = new Date();
-            document.getElementById('date').valueAsDate = now;
-            document.getElementById('time').value = now.toTimeString().slice(0, 5);
-        }
-
-        function setupPhotoPreview() {
-            document.getElementById('photoBefore').addEventListener('change', (e) => previewPhoto(e, 'previewBefore'));
-            document.getElementById('photoAfter').addEventListener('change', (e) => previewPhoto(e, 'previewAfter'));
-        }
-
-        function previewPhoto(event, previewId) {
-            const file = event.target.files[0];
-            const preview = document.getElementById(previewId);
-            
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-
-        document.getElementById('maintenanceForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            if (!db) {
-                alert('⚠️ Primero configura Firebase en la pestaña Configuración');
-                return;
-            }
-
-           
-                alert('✅ Registro guardado y sincronizado con todos los usuarios en tiempo real');
-                document.getElementById('maintenanceForm').reset();
-                document.getElementById('previewBefore').innerHTML = '';
-                document.getElementById('previewAfter').innerHTML = '';
-                setDefaultDateTime();
-                switchTab('historial');
-            } catch (error) {
-                console.error('Error al guardar:', error);
-                alert('❌ Error al guardar. Verifica tu conexión y configuración.');
-            }
-        });
-        const photoBefore = document.getElementById('photoBefore').files[0];
-const photoAfter = document.getElementById('photoAfter').files[0];
-
-let photoBeforeURL = null;
-let photoAfterURL = null;
-
-try {
-    if (photoBefore) {
-        photoBeforeURL = await uploadPhoto(photoBefore, 'before');
-    }
-
-    if (photoAfter) {
-        photoAfterURL = await uploadPhoto(photoAfter, 'after');
-    }
-
-    const maintenance = {
-        equipmentName: document.getElementById('equipmentName').value,
-        maintenanceType: document.getElementById('maintenanceType').value,
-        date: document.getElementById('date').value,
-        time: document.getElementById('time').value,
-        technician: document.getElementById('technician').value,
-        description: document.getElementById('description').value,
-        photoBefore: photoBeforeURL,
-        photoAfter: photoAfterURL,
-        timestamp: new Date().toISOString()
-    };
-
-    await addDoc(collection(db, 'maintenances'), maintenance);
-
-    alert('✅ Registro guardado correctamente');
-} catch (error) {
-    console.error('Error al guardar:', error);
-    alert('❌ Error al guardar el registro');
+/* =========================
+   REALTIME LISTENER
+========================= */
+function listenToChanges() {
+    const q = query(collection(db, 'maintenances'), orderBy('timestamp', 'desc'));
+    unsubscribe = onSnapshot(q, snap => {
+        maintenances = [];
+        snap.forEach(d => maintenances.push({ id: d.id, ...d.data() }));
+        displayMaintenances();
+    });
 }
+
+/* =========================
+   FORM SUBMIT (FIX REAL)
+========================= */
+document.getElementById('maintenanceForm')
+.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    if (!db || !storage) {
+        alert('⚠️ Configura Firebase primero');
+        return;
+    }
+
+    try {
+        const photoBefore = document.getElementById('photoBefore').files[0];
+        const photoAfter = document.getElementById('photoAfter').files[0];
+
+        const beforeURL = photoBefore ? await uploadPhoto(photoBefore, 'before') : null;
+        const afterURL  = photoAfter  ? await uploadPhoto(photoAfter, 'after')  : null;
+
+        await addDoc(collection(db, 'maintenances'), {
+            equipmentName: equipmentName.value,
+            maintenanceType: maintenanceType.value,
+            date: date.value,
+            time: time.value,
+            technician: technician.value,
+            description: description.value,
+            photoBefore: beforeURL,
+            photoAfter: afterURL,
+            timestamp: new Date().toISOString()
+        });
+
+        alert('✅ Registro guardado');
+        e.target.reset();
+        previewBefore.innerHTML = '';
+        previewAfter.innerHTML = '';
+        switchTab('historial');
+    } catch (err) {
+        console.error(err);
+        alert('❌ Error al guardar');
+    }
 });
 
-        function fileToBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
-        async function uploadPhoto(file, folder) {
-    if (!file) return null;
-
-    const fileName = `${folder}/${Date.now()}_${file.name}`;
-    const storageRef = ref(storage, fileName);
-
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+/* =========================
+   STORAGE
+========================= */
+async function uploadPhoto(file, folder) {
+    const fileRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
 }
 
+/* =========================
+   UI
+========================= */
+function updateStatus(ok) {
+    const i = document.getElementById('liveIndicator');
+    i.textContent = ok ? '🔴 EN VIVO - Firebase' : '⚫ OFFLINE';
+    i.classList.toggle('offline', !ok);
+}
 
-        function displayMaintenances() {
-            const list = document.getElementById('maintenanceList');
-            const stats = document.getElementById('stats');
+window.switchTab = function(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById(tab).classList.add('active');
+};
 
-            if (maintenances.length === 0) {
-                list.innerHTML = `
-                    <div class="empty-state">
-                        <h2>No hay registros aún</h2>
-                        <p>Comienza agregando tu primer mantenimiento</p>
-                    </div>
-                `;
-                stats.innerHTML = '';
-                return;
-            }
+/* =========================
+   LOAD SAVED CONFIG
+========================= */
+window.addEventListener('load', () => {
+    const cfg = localStorage.getItem('firebaseConfig');
+    if (cfg) {
+        document.getElementById('firebaseConfigEdit').value = cfg;
+        initFirebase(JSON.parse(cfg));
+        setupBanner.classList.remove('show');
+    }
+});
+</script>
 
-            const typeCount = {};
-            maintenances.forEach(m => {
-                typeCount[m.maintenanceType] = (typeCount[m.maintenanceType] || 0) + 1;
-            });
-
-            stats.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-number">${maintenances.length}</div>
-                    <div class="stat-label">Total Registros</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${typeCount.preventivo || 0}</div>
-                    <div class="stat-label">Preventivos</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${typeCount.correctivo || 0}</div>
-                    <div class="stat-label">Correctivos</div>
-                </div>
-            `;
-
-            list.innerHTML = maintenances.map(m => `
-                <div class="maintenance-card">
-                    <div class="card-header">
-                        <div class="card-title">${m.equipmentName}</div>
-                        <div class="card-date">${formatDate(m.date)} - ${m.time}</div>
-                    </div>
-                    <div class="card-info">
-                        <span class="card-label">Tipo:</span>${m.maintenanceType.toUpperCase()}
-                    </div>
-                    <div class="card-info">
-                        <span class="card-label">Técnico:</span>${m.technician}
-                    </div>
-                    <div class="card-info">
-                        <span class="card-label">Descripción:</span>${m.description}
-                    </div>
-                    ${(m.photoBefore || m.photoAfter) ? `
-                        <div class="card-photos">
-                            ${m.photoBefore ? `
-                                <div class="card-photo">
-                                    <img src="${m.photoBefore}" alt="Antes" onclick="openImageModal('${m.photoBefore}')">
-                                    <p>ANTES</p>
-                                </div>
-                            ` : ''}
-                            ${m.photoAfter ? `
-                                <div class="card-photo">
-                                    <img src="${m.photoAfter}" alt="Después" onclick="openImageModal('${m.photoAfter}')">
-                                    <p>DESPUÉS</p>
-                                </div>
-                            ` : ''}
-                        </div>
-                    ` : ''}
-                    <div style="margin-top: 15px;">
-                        <a href="#" class="btn-download" onclick="downloadReport('${m.id}'); return false;">📥 Descargar</a>
-                        <button class="btn-delete" onclick="deleteRecord('${m.id}')">🗑️ Eliminar</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function formatDate(dateStr) {
-            const date = new Date(dateStr + 'T00:00:00');
-            return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        }
-
-        window.deleteRecord = async function(id) {
-            if (!confirm('¿Estás seguro de eliminar este registro? Se eliminará para todos los usuarios.')) return;
-            
-            try {
-                await deleteDoc(doc(db, 'maintenances', id));
-                alert('✅ Registro eliminado');
-            } catch (error) {
-                console.error('Error al eliminar:', error);
-                alert('❌ Error al eliminar el registro');
-            }
-        }
-
-        window.openImageModal = function(src) {
-            const modal = window.open('', '_blank');
-            modal.document.write(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Vista de Imagen</title>
-                    <style>
-                        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #000; }
-                        img { max-width: 95%; max-height: 95vh; }
-                    </style>
-                </head>
-                <body><img src="${src}"></body>
-                </html>
-            `);
-        }
-
-        window.downloadReport = function(id) {
-            const m = maintenances.find(item => item.id === id);
-            if (!m) return;
-
-            const html = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Reporte de Mantenimiento - ${m.equipmentName}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
-                        h1 { color: #667eea; border-bottom: 3px solid #667eea; padding-bottom: 10px; }
-                        .info { margin: 20px 0; }
-                        .label { font-weight: bold; color: #555; }
-                        .photos { display: flex; gap: 20px; margin: 30px 0; }
-                        .photo { flex: 1; text-align: center; }
-                        .photo img { max-width: 100%; border: 2px solid #ddd; border-radius: 8px; }
-                        .photo p { font-weight: bold; color: #667eea; margin-top: 10px; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Reporte de Mantenimiento</h1>
-                    <div class="info"><span class="label">Equipo/Área:</span> ${m.equipmentName}</div>
-                    <div class="info"><span class="label">Tipo:</span> ${m.maintenanceType.toUpperCase()}</div>
-                    <div class="info"><span class="label">Fecha:</span> ${formatDate(m.date)} - ${m.time}</div>
-                    <div class="info"><span class="label">Técnico:</span> ${m.technician}</div>
-                    <div class="info"><span class="label">Descripción:</span><br>${m.description}</div>
-                    ${(m.photoBefore || m.photoAfter) ? `
-                        <div class="photos">
-                            ${m.photoBefore ? `<div class="photo"><img src="${m.photoBefore}"><p>ANTES</p></div>` : ''}
-                            ${m.photoAfter ? `<div class="photo"><img src="${m.photoAfter}"><p>DESPUÉS</p></div>` : ''}
-                        </div>
-                    ` : ''}
-                </body>
-                </html>
-            `;
-
-            const blob = new Blob([html], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Mantenimiento_${m.equipmentName.replace(/\s+/g, '_')}_${m.date}.html`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        window.switchTab = function(tabName) {
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
-            event.target.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-    </script>
-</body>
-</html>
 
 
 
